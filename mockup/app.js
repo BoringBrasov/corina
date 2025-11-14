@@ -1,3 +1,5 @@
+const STORAGE_KEY = 'boring-mockup-state-v1';
+
 const navItems = [
   { id: 'dashboard', label: 'Overview' },
   { id: 'onboarding', label: 'Onboarding' },
@@ -5,6 +7,7 @@ const navItems = [
   { id: 'strategy', label: 'Strategy' },
   { id: 'content', label: 'Content' },
   { id: 'calendar', label: 'Calendar' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'dm', label: 'DM Inbox' },
   { id: 'leads', label: 'Lead Pipeline' },
   { id: 'brain', label: 'AI Brain' },
@@ -70,7 +73,39 @@ const leadStages = [
   'Lost',
 ];
 
-const state = {
+const contentPlatforms = ['Instagram Reels', 'TikTok', 'LinkedIn', 'Facebook', 'YouTube Shorts'];
+const contentPersonas = [
+  'Distribuitori regionali',
+  'Consumatori tineri',
+  'Retail premium',
+  'Parteneri HoReCa',
+  'Magazine bio locale',
+];
+const contentPillars = ['Educație', 'Dovadă socială', 'Brand & emoție', 'Vânzare'];
+const contentHooks = [
+  'De ce livezile noastre inspiră încredere în fiecare livrare',
+  'Cum se transformă merele crude în gust premium în 90 de secunde',
+  'Partenerii noștri povestesc despre primele 30 de zile cu BORING',
+  'Provocarea sezonului: mix & match de sortimente pentru retaileri',
+  'Din livadă direct pe raftul tău – traseul complet în imagini',
+];
+
+const calendarPlatforms = ['Instagram', 'TikTok', 'Facebook', 'LinkedIn', 'Email', 'WhatsApp'];
+const rangeOptions = ['7', '30', '90'];
+
+const analyticsSeeds = {
+  '7': [48, 52, 67, 58, 74, 81, 88],
+  '30': [42, 55, 60, 58, 62, 68, 71, 76, 79, 83],
+  '90': [30, 36, 44, 52, 60, 65, 70, 74, 78, 82, 86, 90],
+};
+
+const analyticsLabels = {
+  '7': ['Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ', 'Du'],
+  '30': ['Săpt 1', 'Săpt 2', 'Săpt 3', 'Săpt 4', 'Săpt 5', 'Săpt 6', 'Săpt 7', 'Săpt 8', 'Săpt 9', 'Săpt 10'],
+  '90': ['Luna 1', 'Luna 2', 'Luna 3', 'Luna 4', 'Luna 5', 'Luna 6', 'Luna 7', 'Luna 8', 'Luna 9', 'Luna 10', 'Luna 11', 'Luna 12'],
+};
+
+const defaultState = {
   currentView: 'login',
   user: null,
   onboardingStep: 0,
@@ -91,6 +126,12 @@ const state = {
   analysisStarted: false,
   analysisCompleted: false,
   budget: 500,
+  analyticsRange: '7',
+  counters: {
+    content: 3,
+    calendar: 4,
+    leads: 3,
+  },
   contentBatch: [
     {
       id: 'post-1',
@@ -206,8 +247,97 @@ const state = {
   ],
 };
 
+function createDefaultState() {
+  return JSON.parse(JSON.stringify(defaultState));
+}
+
+function deepMerge(target, source) {
+  if (!source) return target;
+  Object.keys(source).forEach((key) => {
+    const value = source[key];
+    if (Array.isArray(value)) {
+      target[key] = value;
+    } else if (value && typeof value === 'object') {
+      target[key] = deepMerge(target[key] ? { ...target[key] } : {}, value);
+    } else {
+      target[key] = value;
+    }
+  });
+  return target;
+}
+
+function loadState() {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return deepMerge(createDefaultState(), parsed);
+  } catch (error) {
+    console.warn('Nu am putut încărca starea salvată.', error);
+    return null;
+  }
+}
+
+const state = loadState() ?? createDefaultState();
+
+function persistState() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn('Nu am putut salva starea curentă.', error);
+  }
+}
+
+function clearPersistedState() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    console.warn('Nu am putut șterge starea curentă.', error);
+  }
+}
+
+function resetState() {
+  const fresh = createDefaultState();
+  Object.keys(state).forEach((key) => {
+    delete state[key];
+  });
+  Object.assign(state, fresh);
+  syncCounters();
+  clearPersistedState();
+  render();
+}
+
+function syncCounters() {
+  if (!state.counters) {
+    state.counters = { content: 0, calendar: 0, leads: 0 };
+  }
+  state.counters.content = state.contentBatch?.length ?? 0;
+  state.counters.calendar = state.calendarSlots?.length ?? 0;
+  state.counters.leads = state.leads?.length ?? 0;
+  if (!rangeOptions.includes(state.analyticsRange)) {
+    state.analyticsRange = '7';
+  }
+}
+
+syncCounters();
+
 function render() {
   const root = document.getElementById('app');
+  if (!state.user && !['login', 'signup'].includes(state.currentView)) {
+    state.currentView = 'login';
+  }
+  if (state.user && !views[state.currentView]) {
+    state.currentView = state.onboardingCompleted ? 'dashboard' : 'onboarding';
+  }
+  if (state.user && ['login', 'signup'].includes(state.currentView)) {
+    state.currentView = state.onboardingCompleted ? 'dashboard' : 'onboarding';
+  }
+  if (state.user && !state.onboardingCompleted && state.currentView === 'dashboard') {
+    state.currentView = 'onboarding';
+  }
   const view = views[state.currentView] ?? views.login;
   const { html, afterRender } = view();
   const isAuthed = Boolean(state.user);
@@ -272,6 +402,8 @@ function render() {
   if (afterRender) {
     afterRender();
   }
+
+  persistState();
 }
 
 function guessIndustry(productHint) {
@@ -282,6 +414,119 @@ function guessIndustry(productHint) {
   if (hint.includes('fitness')) return 'Health & Wellness';
   if (hint.includes('software')) return 'Technology';
   return 'Creative Brands';
+}
+
+function randomFrom(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
+function formatDateTime(date) {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date
+    .toLocaleString('ro-RO', { month: 'short' })
+    .replace(/\./g, '')
+    .toLowerCase();
+  const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${day} ${capitalizedMonth} ${year} ${hours}:${minutes}`;
+}
+
+function formatCalendarDate(dateStr, timeStr) {
+  if (!dateStr) return '';
+  const iso = timeStr ? `${dateStr}T${timeStr}` : dateStr;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  const month = date
+    .toLocaleString('ro-RO', { month: 'short' })
+    .replace(/\./g, '')
+    .toLowerCase();
+  const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+  return `${String(date.getDate()).padStart(2, '0')} ${capitalizedMonth} ${date.getFullYear()}`;
+}
+
+function generateMockPost() {
+  const nextIndex = (state.counters?.content ?? state.contentBatch.length) + 1;
+  state.counters.content = nextIndex;
+  const scheduledDate = new Date();
+  scheduledDate.setDate(scheduledDate.getDate() + nextIndex);
+  scheduledDate.setHours(9 + (nextIndex % 4) * 2, nextIndex % 2 === 0 ? 30 : 0, 0, 0);
+  const persona = randomFrom(contentPersonas);
+  const pillar = randomFrom(contentPillars);
+  const hook = randomFrom(contentHooks);
+  const platform = randomFrom(contentPlatforms);
+  return {
+    id: `post-${nextIndex}`,
+    platform,
+    persona,
+    pillar,
+    hook,
+    status: 'pending',
+    scheduledAt: formatDateTime(scheduledDate),
+  };
+}
+
+function createCalendarSlot({ date, time, platform, caption, status }) {
+  const nextIndex = (state.counters?.calendar ?? state.calendarSlots.length) + 1;
+  state.counters.calendar = nextIndex;
+  return {
+    id: `cal-${nextIndex}`,
+    date: formatCalendarDate(date, time) || date,
+    platform: platform || 'Instagram',
+    caption: caption || 'Postare manuală adăugată',
+    status: status || 'Draft',
+  };
+}
+
+function computeAnalytics(range) {
+  const baseline = analyticsSeeds[range] || analyticsSeeds['7'];
+  const labels = analyticsLabels[range] || analyticsLabels['7'];
+  const approvedPosts = state.contentBatch.filter((post) => post.status === 'approved').length;
+  const scheduledPosts = state.calendarSlots.filter((slot) => slot.status === 'Programat').length;
+  const scale = 1 + approvedPosts * 0.04 + scheduledPosts * 0.02;
+  const trend = baseline.map((value) => Math.round(value * scale));
+  const leadBreakdown = leadStages
+    .map((stage) => ({
+      stage,
+      count: state.leads.filter((lead) => lead.stage === stage).length,
+    }))
+    .filter((item) => item.count > 0);
+  const totalLeads = state.leads.length;
+  const hotLeads = state.leads.filter((lead) => ['Hot', 'Booked Call', 'Sale'].includes(lead.stage)).length;
+  const conversionRate = totalLeads ? Math.round((hotLeads / totalLeads) * 100) : 0;
+  const averageEngagement = trend.length
+    ? Math.round(trend.reduce((sum, value) => sum + value, 0) / trend.length)
+    : 0;
+  const responseTime = Math.max(1, 4 - Math.floor(approvedPosts / 2));
+  const insights = [];
+  if (trend[trend.length - 1] > trend[0]) {
+    insights.push('Trend ascendent al reach-ului organic în intervalul selectat.');
+  } else {
+    insights.push('Stabilizează trendul de reach cu formate noi și CTA-uri variate.');
+  }
+  if (conversionRate >= 15) {
+    insights.push('Conversia DM → call depășește pragul țintă de 15%. Menține ritmul.');
+  } else {
+    insights.push('Optimizează flow-urile DM pentru a crește conversia spre call-uri.');
+  }
+  if (scheduledPosts >= approvedPosts) {
+    insights.push('Postările aprobate sunt deja programate – calendarul este echilibrat.');
+  } else {
+    insights.push('Există postări aprobate neprogramate. Trimite-le în calendar pentru consistență.');
+  }
+
+  return {
+    labels,
+    trend,
+    leadBreakdown,
+    averageEngagement,
+    approvedPosts,
+    scheduledPosts,
+    conversionRate,
+    responseTime,
+    insights,
+  };
 }
 
 function renderLogin() {
@@ -908,9 +1153,20 @@ function renderContent() {
         <h2>Generare conținut</h2>
         <p>Mockup-uri realiste pentru fiecare platformă. Acceptă, ajustează sau respinge.</p>
       </section>
+      <div class="action-row">
+        <button class="primary-btn outline" id="generate-post">Generează o idee nouă</button>
+      </div>
       <section class="card-grid">${cards}</section>
     `,
     afterRender() {
+      const generateBtn = document.getElementById('generate-post');
+      if (generateBtn) {
+        generateBtn.addEventListener('click', () => {
+          const newPost = generateMockPost();
+          state.contentBatch = [newPost, ...state.contentBatch];
+          render();
+        });
+      }
       document.querySelectorAll('[data-post]').forEach((card) => {
         const postId = card.getAttribute('data-post');
         card.querySelectorAll('button').forEach((btn) => {
@@ -928,6 +1184,12 @@ function renderContent() {
 }
 
 function renderCalendar() {
+  const platformOptions = calendarPlatforms
+    .map((platform) => `<option value="${platform}">${platform}</option>`)
+    .join('');
+  const statusOptions = ['Draft', 'În revizie', 'Programat', 'Publicat']
+    .map((status) => `<option value="${status}">${status}</option>`)
+    .join('');
   const slots = state.calendarSlots
     .map((slot) => `
       <div class="calendar-slot">
@@ -954,6 +1216,34 @@ function renderCalendar() {
         <h2>Calendar de conținut</h2>
         <p>Vizualizează și ajustează programarea postărilor generate.</p>
       </section>
+      <section class="card">
+        <h3>Adaugă o postare manual</h3>
+        <form id="calendar-form" class="form-grid">
+          <label>
+            Data
+            <input type="date" name="date" required />
+          </label>
+          <label>
+            Ora
+            <input type="time" name="time" value="09:00" required />
+          </label>
+          <label>
+            Platformă
+            <select name="platform">${platformOptions}</select>
+          </label>
+          <label class="full">
+            Descriere
+            <input type="text" name="caption" placeholder="Ex: Lansare nou sortiment" required />
+          </label>
+          <label>
+            Status
+            <select name="status">${statusOptions}</select>
+          </label>
+          <div class="form-actions full">
+            <button type="submit" class="primary-btn">Adaugă în calendar</button>
+          </div>
+        </form>
+      </section>
       <div class="calendar-grid">${slots}</div>
     `,
     afterRender() {
@@ -963,6 +1253,119 @@ function renderCalendar() {
           const slot = state.calendarSlots.find((item) => item.id === id);
           if (!slot) return;
           slot.status = event.target.value;
+          render();
+        });
+      });
+      const form = document.getElementById('calendar-form');
+      if (form) {
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const formData = new FormData(form);
+          const newSlot = createCalendarSlot({
+            date: formData.get('date'),
+            time: formData.get('time'),
+            platform: formData.get('platform'),
+            caption: formData.get('caption'),
+            status: formData.get('status'),
+          });
+          state.calendarSlots = [newSlot, ...state.calendarSlots];
+          form.reset();
+          const timeInput = form.querySelector('input[name="time"]');
+          if (timeInput) {
+            timeInput.value = '09:00';
+          }
+          render();
+        });
+      }
+    },
+  };
+}
+
+function renderAnalytics() {
+  const range = state.analyticsRange || '7';
+  const analytics = computeAnalytics(range);
+  const maxValue = analytics.trend.length ? Math.max(...analytics.trend) : 0;
+  const toggles = rangeOptions
+    .map(
+      (value) => `
+        <button type="button" class="secondary-btn ${value === range ? 'active' : ''}" data-range="${value}">
+          ${value} zile
+        </button>
+      `
+    )
+    .join('');
+  const bars = analytics.trend
+    .map((value, index) => {
+      const height = maxValue ? Math.round((value / maxValue) * 100) : 0;
+      return `
+        <div class="chart-bar">
+          <div class="chart-bar-track">
+            <div class="chart-bar-fill" style="height:${height}%"></div>
+          </div>
+          <span>${value}%</span>
+          <small>${analytics.labels[index] || ''}</small>
+        </div>
+      `;
+    })
+    .join('');
+  const leadItems = analytics.leadBreakdown.length
+    ? analytics.leadBreakdown
+        .map((item) => `<li><strong>${item.stage}:</strong> ${item.count}</li>`)
+        .join('')
+    : '<li>Pipeline stabil, fără activitate nouă.</li>';
+  const insightItems = analytics.insights.map((item) => `<li>${item}</li>`).join('');
+
+  return {
+    html: `
+      <section class="hero">
+        <h2>Analytics & KPI</h2>
+        <p>Monitorizează pulsul campaniilor și impactul automatizărilor în timp real.</p>
+      </section>
+      <section class="card">
+        <div class="analytics-header">
+          <h3>Engagement organic (${range} zile)</h3>
+          <div class="toggle-group">${toggles}</div>
+        </div>
+        <div class="chart-bars">${bars}</div>
+      </section>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <span>Engagement mediu</span>
+          <strong>${analytics.averageEngagement}%</strong>
+        </div>
+        <div class="metric-card">
+          <span>Postări aprobate</span>
+          <strong>${analytics.approvedPosts}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Postări programate</span>
+          <strong>${analytics.scheduledPosts}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Conversie DM → Call</span>
+          <strong>${analytics.conversionRate}%</strong>
+        </div>
+      </div>
+      <section class="card-grid">
+        <article class="card">
+          <h3>Lead breakdown</h3>
+          <ul class="insight-list">${leadItems}</ul>
+        </article>
+        <article class="card">
+          <h3>Insights recomandate</h3>
+          <ul class="insight-list">${insightItems}</ul>
+        </article>
+        <article class="card">
+          <h3>Timpi de răspuns</h3>
+          <p><strong>${analytics.responseTime}h</strong> timp mediu de răspuns DM în ultimele ${range} zile.</p>
+          <p style="color:var(--muted);">Ținta recomandată este sub 3h pentru lead-uri fierbinți.</p>
+        </article>
+      </section>
+    `,
+    afterRender() {
+      document.querySelectorAll('[data-range]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.analyticsRange = btn.getAttribute('data-range');
           render();
         });
       });
@@ -1176,7 +1579,23 @@ function renderDashboard() {
           )
           .join('')}
       </section>
+      <div class="action-row end">
+        <button class="secondary-btn" id="reset-demo">Resetează demo-ul</button>
+      </div>
     `,
+    afterRender() {
+      const resetBtn = document.getElementById('reset-demo');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          const confirmed = window.confirm(
+            'Vrei să revii la starea inițială a prototipului? Toate datele salvate local vor fi șterse.'
+          );
+          if (confirmed) {
+            resetState();
+          }
+        });
+      }
+    },
   };
 }
 
@@ -1240,6 +1659,7 @@ const views = {
   strategy: renderStrategy,
   content: renderContent,
   calendar: renderCalendar,
+  analytics: renderAnalytics,
   dm: renderDM,
   leads: renderLeads,
   dashboard: renderDashboard,
@@ -1247,5 +1667,13 @@ const views = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (state.user) {
+    const fallback = state.onboardingCompleted ? 'dashboard' : 'onboarding';
+    if (!views[state.currentView] || ['login', 'signup'].includes(state.currentView)) {
+      state.currentView = fallback;
+    }
+  } else {
+    state.currentView = 'login';
+  }
   render();
 });
