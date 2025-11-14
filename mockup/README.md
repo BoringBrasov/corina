@@ -18,6 +18,15 @@ Acest prototip static oferă o experiență interactivă pentru fluxurile MVP de
 1. Deschide fișierul `index.html` din folderul `mockup/` într-un browser modern.
 2. Nu sunt necesare servere sau instalări suplimentare – este o aplicație statică (HTML, CSS, JS).
 
+### Deploy pe Vercel
+
+Repo-ul conține un `index.html` în rădăcină care redirecționează spre `mockup/index.html`, astfel încât deploy-ul direct pe Vercel să
+funcționeze fără configurații suplimentare. Atunci când creezi proiectul în Vercel:
+
+1. Alege repository-ul și păstrează `Root Directory` implicit (rădăcina repo-ului).
+2. Lasă câmpul „Build Command” gol și setează „Output Directory” la `.` pentru a servi fișierele statice existente.
+3. După deploy, URL-ul principal va încărca mockup-ul automat; dacă este nevoie, link-ul direct rămâne `https://<project>/mockup/index.html`.
+
 ## Notă
 
 Mockup-ul simulează comportamentele aplicației: status-urile de analiză, aprobarea postărilor, mutarea lead-urilor și răspunsurile AI sunt generate local pentru a demonstra UX-ul și logica principală. Starea se salvează în browser prin `localStorage`; folosește butonul „Resetează demo-ul” din Dashboard pentru a reveni la starea inițială dacă vrei să reiei experiența de la zero.
