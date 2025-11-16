@@ -7,6 +7,7 @@ const navItems = [
   { id: 'strategy', label: 'Strategy' },
   { id: 'content', label: 'Content' },
   { id: 'calendar', label: 'Calendar' },
+  { id: 'automation', label: 'Automation' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'dm', label: 'DM Inbox' },
   { id: 'leads', label: 'Lead Pipeline' },
@@ -92,6 +93,19 @@ const contentHooks = [
 
 const calendarPlatforms = ['Instagram', 'TikTok', 'Facebook', 'LinkedIn', 'Email', 'WhatsApp'];
 const rangeOptions = ['7', '30', '90'];
+
+const activityTypeMeta = {
+  system: { label: 'Sistem', badge: 'info' },
+  analysis: { label: 'Analiză', badge: 'info' },
+  content: { label: 'Conținut', badge: 'success' },
+  campaign: { label: 'Campanii', badge: 'warning' },
+  calendar: { label: 'Calendar', badge: 'info' },
+  dm: { label: 'DM', badge: 'info' },
+  lead: { label: 'Lead-uri', badge: 'success' },
+  note: { label: 'Notiță', badge: 'info' },
+};
+
+const activityFilters = ['all', ...Object.keys(activityTypeMeta)];
 
 const analyticsSeeds = {
   '7': [48, 52, 67, 58, 74, 81, 88],
@@ -274,6 +288,39 @@ const defaultState = {
       text: 'Salut! Sunt aici să-ți orchestrez marketingul. Spune-mi cu ce începem.',
     },
   ],
+  activityFilter: 'all',
+  activityLog: [
+    {
+      id: 'act-1',
+      type: 'system',
+      detail: 'Strategie v1.2 activată cu buget 500€.',
+      timestamp: '2025-02-26T07:45:00Z',
+    },
+    {
+      id: 'act-2',
+      type: 'campaign',
+      detail: 'Campanie focus: Distribuitori de primăvară.',
+      timestamp: '2025-02-27T10:15:00Z',
+    },
+    {
+      id: 'act-3',
+      type: 'content',
+      detail: 'Postare LinkedIn aprobată pentru partenerii HoReCa.',
+      timestamp: '2025-02-28T08:05:00Z',
+    },
+    {
+      id: 'act-4',
+      type: 'calendar',
+      detail: 'Slot TikTok programat pentru 2 martie.',
+      timestamp: '2025-02-28T08:15:00Z',
+    },
+    {
+      id: 'act-5',
+      type: 'dm',
+      detail: 'AI a răspuns lead-ului „Distribuitor Cluj”.',
+      timestamp: '2025-02-28T11:40:00Z',
+    },
+  ],
 };
 
 function createDefaultState() {
@@ -350,6 +397,12 @@ function syncCounters() {
     state.analyticsRange = '7';
   }
   ensureActiveCampaign();
+  if (!Array.isArray(state.activityLog)) {
+    state.activityLog = [...createDefaultState().activityLog];
+  }
+  if (!state.activityFilter) {
+    state.activityFilter = 'all';
+  }
 }
 
 syncCounters();
@@ -487,6 +540,55 @@ function formatCalendarDate(dateStr, timeStr) {
     .toLowerCase();
   const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
   return `${String(date.getDate()).padStart(2, '0')} ${capitalizedMonth} ${date.getFullYear()}`;
+}
+
+function getActivityLabel(type) {
+  return activityTypeMeta[type]?.label || activityTypeMeta.system.label;
+}
+
+function formatActivityTimestamp(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  return date.toLocaleString('ro-RO', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function logActivity(type, detail) {
+  if (!state.activityLog) {
+    state.activityLog = [];
+  }
+  const resolvedType = activityTypeMeta[type] ? type : 'system';
+  const entry = {
+    id: `act-${Date.now().toString(36)}-${Math.floor(Math.random() * 999)}`,
+    type: resolvedType,
+    detail: detail || 'Actualizare automată',
+    timestamp: new Date().toISOString(),
+  };
+  state.activityLog = [entry, ...state.activityLog].slice(0, 40);
+}
+
+function computeActivitySummary() {
+  const counts = {};
+  Object.keys(activityTypeMeta).forEach((type) => {
+    counts[type] = 0;
+  });
+  const entries = state.activityLog || [];
+  const last24Threshold = Date.now() - 24 * 60 * 60 * 1000;
+  let last24h = 0;
+  entries.forEach((entry) => {
+    const type = activityTypeMeta[entry.type] ? entry.type : 'system';
+    counts[type] = (counts[type] || 0) + 1;
+    const ts = new Date(entry.timestamp).getTime();
+    if (!Number.isNaN(ts) && ts >= last24Threshold) {
+      last24h += 1;
+    }
+  });
+  return { counts, last24h, total: entries.length };
 }
 
 function generateMockPost() {
@@ -1321,6 +1423,7 @@ function renderContent() {
         generateBtn.addEventListener('click', () => {
           const newPost = generateMockPost();
           state.contentBatch = [newPost, ...state.contentBatch];
+          logActivity('content', `AI a generat o idee ${newPost.platform} pentru ${newPost.persona}.`);
           render();
         });
       }
@@ -1339,6 +1442,7 @@ function renderContent() {
           state.campaigns = [newCampaign, ...state.campaigns];
           state.activeCampaignId = newCampaign.id;
           campaignFormEl.reset();
+          logActivity('campaign', `Campanie nouă: ${newCampaign.name}.`);
           render();
         });
       }
@@ -1346,6 +1450,8 @@ function renderContent() {
         btn.addEventListener('click', () => {
           const id = btn.getAttribute('data-set-active');
           state.activeCampaignId = id;
+          const campaign = state.campaigns.find((item) => item.id === id);
+          logActivity('campaign', `Focus mutat pe ${campaign?.name || 'campania selectată'}.`);
           render();
         });
       });
@@ -1357,6 +1463,8 @@ function renderContent() {
             const post = state.contentBatch.find((item) => item.id === postId);
             if (!post) return;
             post.status = action === 'approve' ? 'approved' : 'rejected';
+            const actionLabel = action === 'approve' ? 'aprobată' : 'respinsă';
+            logActivity('content', `${post.platform} a fost ${actionLabel}.`);
             render();
           });
         });
@@ -1367,6 +1475,8 @@ function renderContent() {
           const post = state.contentBatch.find((item) => item.id === postId);
           if (!post) return;
           post.campaignId = event.target.value || null;
+          const campaign = state.campaigns.find((item) => item.id === post.campaignId);
+          logActivity('campaign', `Postarea ${post.platform} a fost asociată ${campaign ? campaign.name : 'fără campanie'}.`);
           render();
         });
       });
@@ -1514,6 +1624,7 @@ function renderCalendar() {
           if (timeInput) {
             timeInput.value = '09:00';
           }
+          logActivity('calendar', `${newSlot.platform} programat pe ${newSlot.date}.`);
           render();
         });
       }
@@ -1530,9 +1641,140 @@ function renderCalendar() {
           const slot = state.calendarSlots.find((item) => item.id === slotId);
           if (!slot) return;
           slot.campaignId = event.target.value || null;
+          const campaign = state.campaigns.find((item) => item.id === slot.campaignId);
+          logActivity('calendar', `Slotul ${slot.platform} a fost atribuit ${campaign ? campaign.name : 'fără campanie'}.`);
           render();
         });
       });
+    },
+  };
+}
+
+function renderAutomation() {
+  const selectedFilter = state.activityFilter || 'all';
+  const entries = state.activityLog || [];
+  const filteredEntries =
+    selectedFilter === 'all' ? entries : entries.filter((entry) => entry.type === selectedFilter);
+  const summary = computeActivitySummary();
+  const filterOptions = activityFilters
+    .map(
+      (value) => `
+        <option value="${value}" ${value === selectedFilter ? 'selected' : ''}>
+          ${value === 'all' ? 'Toate tipurile' : getActivityLabel(value)}
+        </option>
+      `
+    )
+    .join('');
+  const entryList = filteredEntries.length
+    ? filteredEntries
+        .map(
+          (entry) => `
+            <article class="activity-item">
+              <div>
+                <span class="badge ${activityTypeMeta[entry.type]?.badge || 'info'} activity-pill">${getActivityLabel(
+                  entry.type
+                )}</span>
+                <p>${entry.detail}</p>
+                <p class="activity-meta">${formatActivityTimestamp(entry.timestamp)}</p>
+              </div>
+            </article>
+          `
+        )
+        .join('')
+    : '<p style="color:var(--muted);">Nicio activitate pentru filtrul selectat.</p>';
+  const typeOptions = Object.keys(activityTypeMeta)
+    .map((type) => `<option value="${type}">${getActivityLabel(type)}</option>`)
+    .join('');
+
+  return {
+    html: `
+      <section class="hero">
+        <h2>Automation & Logs</h2>
+        <p>Monitorizează toate evenimentele generate de AI și adaugă note manuale.</p>
+      </section>
+      <div class="metrics-grid tight">
+        <div class="metric-card">
+          <span>Evenimente totale</span>
+          <strong>${summary.total}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Ultimele 24h</span>
+          <strong>${summary.last24h}</strong>
+        </div>
+        <div class="metric-card">
+          <span>Filtru curent</span>
+          <strong>${selectedFilter === 'all' ? 'Toate' : getActivityLabel(selectedFilter)}</strong>
+        </div>
+      </div>
+      <section class="card">
+        <div class="filter-row">
+          <label class="full">
+            Filtru tip eveniment
+            <select id="activity-filter">${filterOptions}</select>
+          </label>
+          <button type="button" class="secondary-btn" id="copy-activity">Copiază raportul</button>
+        </div>
+        <div class="activity-log">${entryList}</div>
+      </section>
+      <section class="card">
+        <h3>Notează o actualizare manuală</h3>
+        <form id="activity-note-form" class="form-grid">
+          <label>
+            Tip
+            <select name="type">${typeOptions}</select>
+          </label>
+          <label class="full">
+            Detalii
+            <textarea name="detail" placeholder="Ex: Lead strategic confirmat pentru campania Q2" required></textarea>
+          </label>
+          <div class="form-actions full">
+            <button type="submit" class="primary-btn">Salvează nota</button>
+          </div>
+        </form>
+      </section>
+    `,
+    afterRender() {
+      const filterSelect = document.getElementById('activity-filter');
+      if (filterSelect) {
+        filterSelect.addEventListener('change', (event) => {
+          state.activityFilter = event.target.value;
+          render();
+        });
+      }
+      const noteForm = document.getElementById('activity-note-form');
+      if (noteForm) {
+        noteForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const formData = new FormData(noteForm);
+          logActivity(formData.get('type') || 'note', formData.get('detail'));
+          noteForm.reset();
+          render();
+        });
+      }
+      const copyBtn = document.getElementById('copy-activity');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', async () => {
+          const excerpt = (state.activityLog || [])
+            .slice(0, 5)
+            .map(
+              (entry) => `[${getActivityLabel(entry.type)}] ${formatActivityTimestamp(entry.timestamp)} – ${entry.detail}`
+            )
+            .join('\n');
+          const payload = excerpt || 'Nicio activitate disponibilă.';
+          try {
+            if (!navigator.clipboard) {
+              throw new Error('Clipboard API indisponibil');
+            }
+            await navigator.clipboard.writeText(payload);
+            copyBtn.textContent = 'Copiat ✅';
+            setTimeout(() => {
+              copyBtn.textContent = 'Copiază raportul';
+            }, 1800);
+          } catch (error) {
+            window.alert('Copierea automată a eșuat. Poți selecta manual textul dorit din log.');
+          }
+        });
+      }
     },
   };
 }
@@ -1696,6 +1938,7 @@ function renderDM() {
           text: 'Mulțumesc! Revin cu răspuns după ce discut cu echipa.',
         });
         form.reset();
+        logActivity('dm', `AI a răspuns conversației ${state.dmSelectedConversation}.`);
         render();
       });
     },
@@ -1764,6 +2007,7 @@ function advanceLead(id) {
     lead.nextStep = 'Reintră în nurturing după 30 zile';
     lead.score = 20;
   }
+  logActivity('lead', `${lead.name} este acum în stadiul ${lead.stage}.`);
   render();
 }
 
@@ -1808,20 +2052,20 @@ function renderDashboard() {
         .join('')
     : '<article class="card"><p style="color:var(--muted);">Nicio campanie încă. Adaugă una din modulul de conținut.</p></article>';
 
-  const timeline = [
-    {
-      title: 'Strategie v1.2 activă',
-      detail: 'Buget 500€ · Mix educație 40% · DM intensitate 12/zi',
-    },
-    {
-      title: 'Lead nou cald',
-      detail: 'Distribuitor Cluj a răspuns cu interes pentru 500L/lună',
-    },
-    {
-      title: 'Postare aprobată',
-      detail: 'TikTok – Taste test challenge programat pe 2 martie',
-    },
-  ];
+  const timelineEntries = (state.activityLog || []).slice(0, 4);
+  const timeline = timelineEntries.length
+    ? timelineEntries
+        .map((entry) => `
+          <article class="timeline-item">
+            <span class="badge ${activityTypeMeta[entry.type]?.badge || 'info'} activity-pill">${getActivityLabel(
+              entry.type
+            )}</span>
+            <h3>${entry.detail}</h3>
+            <p class="activity-meta">${formatActivityTimestamp(entry.timestamp)}</p>
+          </article>
+        `)
+        .join('')
+    : '<article class="timeline-item"><p style="color:var(--muted);">Nicio activitate recentă. Interacționează cu modulele pentru a vedea jurnalul.</p></article>';
 
   return {
     html: `
@@ -1844,18 +2088,7 @@ function renderDashboard() {
         </div>
       </div>
       <section class="card-grid">${campaignHighlights}</section>
-      <section class="timeline">
-        ${timeline
-          .map(
-            (item) => `
-              <article class="timeline-item">
-                <h3>${item.title}</h3>
-                <p style="color:var(--muted);">${item.detail}</p>
-              </article>
-            `
-          )
-          .join('')}
-      </section>
+      <section class="timeline">${timeline}</section>
       <div class="action-row end">
         <button class="secondary-btn" id="reset-demo">Resetează demo-ul</button>
       </div>
@@ -1936,6 +2169,7 @@ const views = {
   strategy: renderStrategy,
   content: renderContent,
   calendar: renderCalendar,
+  automation: renderAutomation,
   analytics: renderAnalytics,
   dm: renderDM,
   leads: renderLeads,

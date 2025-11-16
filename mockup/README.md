@@ -14,6 +14,7 @@ Acest prototip static oferă o experiență interactivă pentru fluxurile MVP de
 - Generator rapid de idei noi de conținut + formular pentru adăugarea manuală a postărilor în calendar
 - Planificator de campanii cu carduri dedicate, progres și formular de creare rapidă
 - Posibilitatea de a asocia fiecare postare sau intrare din calendar la o campanie, plus filtre și focus AI
+- Modul „Automation & Logs” cu jurnal în timp real, filtre pe tipuri de evenimente și export rapid al activităților
 
 ## Cum rulezi mockup-ul
 
@@ -28,6 +29,12 @@ funcționeze fără configurații suplimentare. Atunci când creezi proiectul î
 1. Alege repository-ul și păstrează `Root Directory` implicit (rădăcina repo-ului).
 2. Lasă câmpul „Build Command” gol și setează „Output Directory” la `.` pentru a servi fișierele statice existente.
 3. După deploy, URL-ul principal va încărca mockup-ul automat; dacă este nevoie, link-ul direct rămâne `https://<project>/mockup/index.html`.
+
+### Modul Automation & Logs
+
+- Găsești un tab dedicat în sidebar care listează toate acțiunile automate: generări de conținut, aprobări, programări în calendar, răspunsuri DM și mutări în pipeline.
+- Filtrează jurnalul pe tipuri (Conținut, Campanii, Calendar, DM, Lead etc.) și folosește butonul „Copiază raportul” pentru a trimite rapid un rezumat colegilor.
+- Orice interacțiune din mockup adaugă automat un eveniment nou, iar tu poți completa manual notițe suplimentare direct din formularul inclus.
 
 ## Notă
 
