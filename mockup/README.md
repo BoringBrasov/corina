@@ -12,6 +12,8 @@ Acest prototip static oferă o experiență interactivă pentru fluxurile MVP de
 - Agentul Central (AI Brain) cu răspunsuri demonstrative
 - Persistență locală a datelor (localStorage) și buton de reset din Dashboard
 - Generator rapid de idei noi de conținut + formular pentru adăugarea manuală a postărilor în calendar
+- Planificator de campanii cu carduri dedicate, progres și formular de creare rapidă
+- Posibilitatea de a asocia fiecare postare sau intrare din calendar la o campanie, plus filtre și focus AI
 
 ## Cum rulezi mockup-ul
 

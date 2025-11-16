@@ -132,6 +132,28 @@ const defaultState = {
     calendar: 4,
     leads: 3,
   },
+  campaigns: [
+    {
+      id: 'camp-1',
+      name: 'Distribuitori de primăvară',
+      goal: 'Lead-uri B2B pentru parteneriate regionale',
+      timeframe: '1-31 martie',
+      targetPosts: 12,
+      focus: 'Distribuitori & retail',
+      status: 'Activ',
+    },
+    {
+      id: 'camp-2',
+      name: 'Retail organic premium',
+      goal: 'Creștere vânzări directe în magazine specializate',
+      timeframe: 'martie - aprilie',
+      targetPosts: 8,
+      focus: 'Consumatori finali',
+      status: 'În pregătire',
+    },
+  ],
+  activeCampaignId: 'camp-1',
+  calendarFilter: 'all',
   contentBatch: [
     {
       id: 'post-1',
@@ -141,6 +163,7 @@ const defaultState = {
       hook: 'Din livezi locale către raftul tău în 48h',
       status: 'pending',
       scheduledAt: '2025-03-01 09:30',
+      campaignId: 'camp-1',
     },
     {
       id: 'post-2',
@@ -150,6 +173,7 @@ const defaultState = {
       hook: 'Sucul care se face singur dimineața',
       status: 'pending',
       scheduledAt: '2025-03-02 18:00',
+      campaignId: 'camp-1',
     },
     {
       id: 'post-3',
@@ -159,6 +183,7 @@ const defaultState = {
       hook: 'Cum creezi o experiență premium din ingrediente simple',
       status: 'approved',
       scheduledAt: '2025-03-03 08:45',
+      campaignId: 'camp-2',
     },
   ],
   calendarSlots: [
@@ -168,6 +193,7 @@ const defaultState = {
       platform: 'Instagram Reels',
       caption: 'Behind the orchard morning pick',
       status: 'Programat',
+      campaignId: 'camp-1',
     },
     {
       id: 'cal-2',
@@ -175,6 +201,7 @@ const defaultState = {
       platform: 'TikTok',
       caption: 'Taste test challenge cu distribuitori',
       status: 'În revizie',
+      campaignId: 'camp-1',
     },
     {
       id: 'cal-3',
@@ -182,6 +209,7 @@ const defaultState = {
       platform: 'LinkedIn',
       caption: 'Studiu de caz: parteneriat retail local',
       status: 'Programat',
+      campaignId: 'camp-2',
     },
     {
       id: 'cal-4',
@@ -189,6 +217,7 @@ const defaultState = {
       platform: 'Email',
       caption: 'Newsletter: sezonul de mere începe',
       status: 'Draft',
+      campaignId: null,
     },
   ],
   leads: [
@@ -320,9 +349,23 @@ function syncCounters() {
   if (!rangeOptions.includes(state.analyticsRange)) {
     state.analyticsRange = '7';
   }
+  ensureActiveCampaign();
 }
 
 syncCounters();
+
+function ensureActiveCampaign() {
+  if (!Array.isArray(state.campaigns)) {
+    state.campaigns = [];
+  }
+  const hasActive = state.campaigns.some((campaign) => campaign.id === state.activeCampaignId);
+  if (!hasActive) {
+    state.activeCampaignId = state.campaigns[0]?.id || null;
+  }
+  if (!state.calendarFilter || (state.calendarFilter !== 'all' && !state.campaigns.some((c) => c.id === state.calendarFilter))) {
+    state.calendarFilter = 'all';
+  }
+}
 
 function render() {
   const root = document.getElementById('app');
@@ -464,10 +507,11 @@ function generateMockPost() {
     hook,
     status: 'pending',
     scheduledAt: formatDateTime(scheduledDate),
+    campaignId: state.activeCampaignId || null,
   };
 }
 
-function createCalendarSlot({ date, time, platform, caption, status }) {
+function createCalendarSlot({ date, time, platform, caption, status, campaignId }) {
   const nextIndex = (state.counters?.calendar ?? state.calendarSlots.length) + 1;
   state.counters.calendar = nextIndex;
   return {
@@ -476,6 +520,36 @@ function createCalendarSlot({ date, time, platform, caption, status }) {
     platform: platform || 'Instagram',
     caption: caption || 'Postare manuală adăugată',
     status: status || 'Draft',
+    campaignId: campaignId || null,
+  };
+}
+
+function summarizeCampaign(campaign) {
+  const assignedPosts = state.contentBatch.filter((post) => post.campaignId === campaign.id);
+  const approvedPosts = assignedPosts.filter((post) => post.status === 'approved').length;
+  const scheduledSlots = state.calendarSlots.filter((slot) => slot.campaignId === campaign.id);
+  const completion = campaign.targetPosts
+    ? Math.min(100, Math.round((assignedPosts.length / campaign.targetPosts) * 100))
+    : 0;
+  return {
+    assigned: assignedPosts.length,
+    approved: approvedPosts,
+    scheduled: scheduledSlots.length,
+    completion,
+  };
+}
+
+function createCampaign({ name, goal, timeframe, targetPosts, focus }) {
+  const baseIndex = (state.campaigns?.length || 0) + 1;
+  const id = `camp-${baseIndex}-${Date.now().toString(36).slice(-3)}`;
+  return {
+    id,
+    name: name?.trim() || `Campanie ${baseIndex}`,
+    goal: goal?.trim() || 'Obiectiv definit de AI',
+    timeframe: timeframe?.trim() || 'TBA',
+    targetPosts: Number(targetPosts) > 0 ? Number(targetPosts) : 6,
+    focus: focus?.trim() || 'General',
+    status: 'Activ',
   };
 }
 
@@ -1112,6 +1186,34 @@ function renderStrategy() {
 }
 
 function renderContent() {
+  const campaignCards = state.campaigns.length
+    ? state.campaigns
+        .map((campaign) => {
+          const summary = summarizeCampaign(campaign);
+          const isActive = campaign.id === state.activeCampaignId;
+          const badgeClass = campaign.status === 'Activ' ? 'success' : 'info';
+          return `
+            <article class="card campaign-card ${isActive ? 'active' : ''}" data-campaign="${campaign.id}">
+              <div class="badge ${badgeClass}">${isActive ? 'Campanie focus' : campaign.status}</div>
+              <h3>${campaign.name}</h3>
+              <p class="subtitle">${campaign.goal}</p>
+              <p style="color:var(--muted);font-size:13px;">${campaign.timeframe}</p>
+              <div class="progress-track">
+                <div class="progress-fill" style="width:${summary.completion}%"></div>
+              </div>
+              <small>${summary.assigned}/${campaign.targetPosts} postări asociate · ${summary.approved} aprobate · ${summary.scheduled} programate</small>
+              <div class="campaign-meta">
+                <span>${campaign.focus}</span>
+              </div>
+              <button class="secondary-btn small" data-set-active="${campaign.id}" ${
+                isActive ? 'disabled' : ''
+              }>${isActive ? 'Campanie curentă' : 'Focusează AI-ul aici'}</button>
+            </article>
+          `;
+        })
+        .join('')
+    : '<p style="color:var(--muted);">Adaugă o campanie pentru a organiza postările pe obiective.</p>';
+
   const cards = state.contentBatch
     .map((post) => {
       const badgeClass =
@@ -1126,6 +1228,19 @@ function renderContent() {
           : post.status === 'rejected'
           ? 'Respins'
           : 'În revizie';
+      const campaign = post.campaignId
+        ? state.campaigns.find((item) => item.id === post.campaignId)
+        : null;
+      const campaignSelectOptions = [
+        '<option value="">Fără campanie</option>',
+        ...state.campaigns.map(
+          (campaignOption) => `
+            <option value="${campaignOption.id}" ${
+              campaignOption.id === post.campaignId ? 'selected' : ''
+            }>${campaignOption.name}</option>
+          `
+        ),
+      ].join('');
       return `
         <article class="card" data-post="${post.id}">
           <div class="badge ${badgeClass}">${badgeLabel}</div>
@@ -1134,6 +1249,15 @@ function renderContent() {
           <p><strong>Pilon:</strong> ${post.pillar}</p>
           <p style="font-style:italic;">${post.hook}</p>
           <p style="color:var(--muted);font-size:13px;">Programat: ${post.scheduledAt}</p>
+          ${
+            campaign
+              ? `<p class="badge warning" style="width:max-content;">${campaign.name}</p>`
+              : '<p class="badge info" style="width:max-content;">Fără campanie</p>'
+          }
+          <label class="campaign-field">
+            <span>Campanie</span>
+            <select data-post-campaign="${post.id}">${campaignSelectOptions}</select>
+          </label>
           <div style="display:flex;gap:10px;">
             <button class="primary-btn" data-action="approve" ${
               post.status === 'approved' ? 'disabled' : ''
@@ -1147,12 +1271,45 @@ function renderContent() {
     })
     .join('');
 
+  const campaignForm = `
+    <section class="card">
+      <h3>Adaugă o campanie</h3>
+      <form id="campaign-form" class="form-grid">
+        <label>
+          Nume campanie
+          <input type="text" name="name" placeholder="Ex: Lansare vară" required />
+        </label>
+        <label>
+          Obiectiv
+          <input type="text" name="goal" placeholder="Ex: Lead-uri retail premium" required />
+        </label>
+        <label>
+          Interval
+          <input type="text" name="timeframe" placeholder="Ex: aprilie - mai" />
+        </label>
+        <label>
+          Țintă postări
+          <input type="number" min="3" name="targetPosts" value="8" />
+        </label>
+        <label class="full">
+          Focus creativ
+          <input type="text" name="focus" placeholder="Distribuitori, consumatori, etc." />
+        </label>
+        <div class="form-actions full">
+          <button type="submit" class="primary-btn">Salvează campania</button>
+        </div>
+      </form>
+    </section>
+  `;
+
   return {
     html: `
       <section class="hero">
         <h2>Generare conținut</h2>
         <p>Mockup-uri realiste pentru fiecare platformă. Acceptă, ajustează sau respinge.</p>
       </section>
+      <section class="card-grid campaign-grid">${campaignCards}</section>
+      ${campaignForm}
       <div class="action-row">
         <button class="primary-btn outline" id="generate-post">Generează o idee nouă</button>
       </div>
@@ -1167,6 +1324,31 @@ function renderContent() {
           render();
         });
       }
+      const campaignFormEl = document.getElementById('campaign-form');
+      if (campaignFormEl) {
+        campaignFormEl.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const formData = new FormData(campaignFormEl);
+          const newCampaign = createCampaign({
+            name: formData.get('name'),
+            goal: formData.get('goal'),
+            timeframe: formData.get('timeframe'),
+            targetPosts: formData.get('targetPosts'),
+            focus: formData.get('focus'),
+          });
+          state.campaigns = [newCampaign, ...state.campaigns];
+          state.activeCampaignId = newCampaign.id;
+          campaignFormEl.reset();
+          render();
+        });
+      }
+      document.querySelectorAll('[data-set-active]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-set-active');
+          state.activeCampaignId = id;
+          render();
+        });
+      });
       document.querySelectorAll('[data-post]').forEach((card) => {
         const postId = card.getAttribute('data-post');
         card.querySelectorAll('button').forEach((btn) => {
@@ -1177,6 +1359,15 @@ function renderContent() {
             post.status = action === 'approve' ? 'approved' : 'rejected';
             render();
           });
+        });
+      });
+      document.querySelectorAll('[data-post-campaign]').forEach((select) => {
+        select.addEventListener('change', (event) => {
+          const postId = select.getAttribute('data-post-campaign');
+          const post = state.contentBatch.find((item) => item.id === postId);
+          if (!post) return;
+          post.campaignId = event.target.value || null;
+          render();
         });
       });
     },
@@ -1190,15 +1381,36 @@ function renderCalendar() {
   const statusOptions = ['Draft', 'În revizie', 'Programat', 'Publicat']
     .map((status) => `<option value="${status}">${status}</option>`)
     .join('');
-  const slots = state.calendarSlots
+  const campaignFilterOptions = [
+    `<option value="all" ${state.calendarFilter === 'all' ? 'selected' : ''}>Toate campaniile</option>`,
+    ...state.campaigns.map(
+      (campaign) => `<option value="${campaign.id}" ${
+        state.calendarFilter === campaign.id ? 'selected' : ''
+      }>${campaign.name}</option>`
+    ),
+  ].join('');
+  const campaignSelectOptions = [
+    '<option value="">Fără campanie</option>',
+    ...state.campaigns.map((campaign) => `<option value="${campaign.id}">${campaign.name}</option>`),
+  ].join('');
+  const filteredSlots =
+    state.calendarFilter === 'all'
+      ? state.calendarSlots
+      : state.calendarSlots.filter((slot) => slot.campaignId === state.calendarFilter);
+  const slots = filteredSlots
     .map((slot) => `
       <div class="calendar-slot">
         <h4>${slot.date}</h4>
         <p style="font-weight:600;">${slot.platform}</p>
         <p>${slot.caption}</p>
         <p class="badge info">${slot.status}</p>
-       <label style="font-size:12px;color:var(--muted);">
-         Modifică statusul
+        <p class="campaign-tag">${
+          slot.campaignId
+            ? state.campaigns.find((campaign) => campaign.id === slot.campaignId)?.name || 'Campanie ștearsă'
+            : 'Fără campanie'
+        }</p>
+        <label style="font-size:12px;color:var(--muted);">
+          Modifică statusul
           <select data-cal="${slot.id}">
             <option value="Draft" ${slot.status === 'Draft' ? 'selected' : ''}>Draft</option>
             <option value="În revizie" ${slot.status === 'În revizie' ? 'selected' : ''}>În revizie</option>
@@ -1206,9 +1418,23 @@ function renderCalendar() {
             <option value="Publicat" ${slot.status === 'Publicat' ? 'selected' : ''}>Publicat</option>
           </select>
         </label>
+        <label style="font-size:12px;color:var(--muted);">
+          Campanie
+          <select data-cal-campaign="${slot.id}">
+            <option value="" ${slot.campaignId ? '' : 'selected'}>Fără</option>
+            ${state.campaigns
+              .map(
+                (campaign) => `<option value="${campaign.id}" ${
+                  campaign.id === slot.campaignId ? 'selected' : ''
+                }>${campaign.name}</option>`
+              )
+              .join('')}
+          </select>
+        </label>
       </div>
     `)
     .join('');
+  const activeCampaign = state.campaigns.find((campaign) => campaign.id === state.activeCampaignId);
 
   return {
     html: `
@@ -1216,6 +1442,15 @@ function renderCalendar() {
         <h2>Calendar de conținut</h2>
         <p>Vizualizează și ajustează programarea postărilor generate.</p>
       </section>
+      <div class="filter-row">
+        <label>
+          Filtrează după campanie
+          <select id="calendar-filter">${campaignFilterOptions}</select>
+        </label>
+        <div class="active-campaign-pill">
+          Focus curent: <strong>${activeCampaign?.name || 'Neselectat'}</strong>
+        </div>
+      </div>
       <section class="card">
         <h3>Adaugă o postare manual</h3>
         <form id="calendar-form" class="form-grid">
@@ -1238,6 +1473,10 @@ function renderCalendar() {
           <label>
             Status
             <select name="status">${statusOptions}</select>
+          </label>
+          <label>
+            Campanie
+            <select name="campaignId">${campaignSelectOptions}</select>
           </label>
           <div class="form-actions full">
             <button type="submit" class="primary-btn">Adaugă în calendar</button>
@@ -1267,6 +1506,7 @@ function renderCalendar() {
             platform: formData.get('platform'),
             caption: formData.get('caption'),
             status: formData.get('status'),
+            campaignId: formData.get('campaignId'),
           });
           state.calendarSlots = [newSlot, ...state.calendarSlots];
           form.reset();
@@ -1277,6 +1517,22 @@ function renderCalendar() {
           render();
         });
       }
+      const filterSelect = document.getElementById('calendar-filter');
+      if (filterSelect) {
+        filterSelect.addEventListener('change', (event) => {
+          state.calendarFilter = event.target.value;
+          render();
+        });
+      }
+      document.querySelectorAll('[data-cal-campaign]').forEach((select) => {
+        select.addEventListener('change', (event) => {
+          const slotId = select.getAttribute('data-cal-campaign');
+          const slot = state.calendarSlots.find((item) => item.id === slotId);
+          if (!slot) return;
+          slot.campaignId = event.target.value || null;
+          render();
+        });
+      });
     },
   };
 }
@@ -1531,6 +1787,26 @@ function renderDashboard() {
   const scheduled = state.calendarSlots.filter((slot) => slot.status === 'Programat').length;
   const hotLeads = state.leads.filter((lead) => ['Hot', 'Booked Call', 'Sale'].includes(lead.stage))
     .length;
+  const campaignHighlights = state.campaigns.length
+    ? state.campaigns
+        .slice(0, 3)
+        .map((campaign) => {
+          const summary = summarizeCampaign(campaign);
+          const label = campaign.id === state.activeCampaignId ? 'Campanie focus' : campaign.status;
+          return `
+            <article class="card">
+              <div class="badge info">${label}</div>
+              <h3>${campaign.name}</h3>
+              <p class="subtitle">${campaign.goal}</p>
+              <div class="progress-track small">
+                <div class="progress-fill" style="width:${summary.completion}%"></div>
+              </div>
+              <small>${summary.assigned}/${campaign.targetPosts} postări cartografiate · ${summary.approved} aprobate · ${summary.scheduled} programate</small>
+            </article>
+          `;
+        })
+        .join('')
+    : '<article class="card"><p style="color:var(--muted);">Nicio campanie încă. Adaugă una din modulul de conținut.</p></article>';
 
   const timeline = [
     {
@@ -1567,6 +1843,7 @@ function renderDashboard() {
           <strong>${hotLeads}</strong>
         </div>
       </div>
+      <section class="card-grid">${campaignHighlights}</section>
       <section class="timeline">
         ${timeline
           .map(
