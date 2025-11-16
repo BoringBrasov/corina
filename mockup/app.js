@@ -14,6 +14,39 @@ const navItems = [
   { id: 'brain', label: 'AI Brain' },
 ];
 
+const tourSteps = [
+  {
+    view: 'dashboard',
+    title: 'Overview zilnic',
+    description: 'Vezi pulsul business-ului, statusul zilei și notificările recente.',
+  },
+  {
+    view: 'content',
+    title: 'Generatorul de conținut',
+    description: 'Gestionezi campanii, aprobări și idei noi într-un singur loc.',
+  },
+  {
+    view: 'calendar',
+    title: 'Calendarul de postări',
+    description: 'Adaugă manual postări, filtrează pe campanii și pregătește programările.',
+  },
+  {
+    view: 'dm',
+    title: 'Inbox DM & Automation',
+    description: 'Monitorizează conversațiile automatizate și răspunde manual când e nevoie.',
+  },
+  {
+    view: 'leads',
+    title: 'Pipeline complet',
+    description: 'Mută lead-urile între stadii și vezi recomandările AI pentru următorul pas.',
+  },
+  {
+    view: 'brain',
+    title: 'AI Brain',
+    description: 'Comandă analize, idei și explicații direct din creierul central al platformei.',
+  },
+];
+
 const onboardingToneOptions = [
   'Cald',
   'Premium',
@@ -124,6 +157,10 @@ const defaultState = {
   user: null,
   onboardingStep: 0,
   onboardingCompleted: false,
+  showCommandPalette: false,
+  commandQuery: '',
+  showTour: false,
+  tourStep: 0,
   onboardingData: {
     brandName: '',
     product: '',
@@ -386,6 +423,34 @@ function resetState() {
   render();
 }
 
+function enterDemoMode() {
+  state.user = { name: 'Demo User', email: 'demo@boring.ai' };
+  state.onboardingData = {
+    brandName: 'Sucul Verde',
+    product: 'Suc de mere artizanal',
+    industryGuess: 'Food & Beverage',
+    goals: ['Atrage distribuitori', 'Crește vânzările directe'],
+    primaryChannel: 'Distribuitori',
+    distributorRange: 4,
+    capacity: 7,
+    tone: ['Cald', 'Premium'],
+    resources: ['Logo vectorial', 'Fotografii produse'],
+    notes: 'Păstrează un ton poetic și pragmatic în același timp.',
+  };
+  state.onboardingCompleted = true;
+  state.onboardingStep = 5;
+  state.analysisStarted = true;
+  state.analysisCompleted = true;
+  state.analysisProgress = analysisModules.map((name) => ({ name, status: 'done' }));
+  state.showCommandPalette = false;
+  state.commandQuery = '';
+  state.showTour = false;
+  state.tourStep = 0;
+  state.currentView = 'dashboard';
+  logActivity('system', 'Modul demo a fost activat. Explorează liber aplicația.');
+  render();
+}
+
 function syncCounters() {
   if (!state.counters) {
     state.counters = { content: 0, calendar: 0, leads: 0 };
@@ -437,6 +502,7 @@ function render() {
   const view = views[state.currentView] ?? views.login;
   const { html, afterRender } = view();
   const isAuthed = Boolean(state.user);
+  const viewContent = isAuthed ? `${renderTopbar()}${html}` : html;
   const navHtml = isAuthed
     ? `<aside class="sidebar">
         <div>
@@ -465,7 +531,12 @@ function render() {
   root.innerHTML = `
     <div class="${shellClass}">
       ${navHtml}
-      <main class="main">${html}</main>
+      <main class="main">${viewContent}</main>
+      ${
+        isAuthed
+          ? `${state.showCommandPalette ? renderCommandPalette() : ''}${state.showTour ? renderTourOverlay() : ''}`
+          : ''
+      }
     </div>
   `;
 
@@ -489,7 +560,33 @@ function render() {
           analysisStarted: false,
           analysisCompleted: false,
           analysisProgress: [],
+          showCommandPalette: false,
+          commandQuery: '',
+          showTour: false,
+          tourStep: 0,
         });
+        render();
+      });
+    }
+    const resetBtn = document.querySelector('[data-action="reset-demo"]');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        resetState();
+      });
+    }
+    const commandBtn = document.querySelector('[data-action="open-command"]');
+    if (commandBtn) {
+      commandBtn.addEventListener('click', () => {
+        state.showCommandPalette = true;
+        state.commandQuery = '';
+        render();
+      });
+    }
+    const tourBtn = document.querySelector('[data-action="open-tour"]');
+    if (tourBtn) {
+      tourBtn.addEventListener('click', () => {
+        state.showTour = true;
+        state.tourStep = 0;
         render();
       });
     }
@@ -499,7 +596,273 @@ function render() {
     afterRender();
   }
 
+  if (state.showCommandPalette) {
+    setupCommandPalette();
+  }
+  if (state.showTour) {
+    setupTourOverlay();
+  }
+
   persistState();
+}
+
+function renderTopbar() {
+  const brandName = state.onboardingData?.brandName || 'Brand demo';
+  const product = state.onboardingData?.product || 'Marketing orchestrat complet';
+  const campaign = state.campaigns?.find((item) => item.id === state.activeCampaignId);
+  const viewLabel = navItems.find((item) => item.id === state.currentView)?.label || 'Overview';
+  const analysisBadge = state.analysisCompleted
+    ? '<span class="badge success">Analiză completă</span>'
+    : state.analysisStarted
+    ? '<span class="badge info">Analiză în curs</span>'
+    : '<span class="badge warning">Analiză în standby</span>';
+  const campaignBadge = campaign ? `<span class="badge warning">Focus: ${campaign.name}</span>` : '';
+  return `
+    <div class="app-topbar">
+      <div class="topbar-meta">
+        <p class="overline">${brandName}</p>
+        <div class="topbar-row">
+          <strong>${viewLabel}</strong>
+          <span class="topbar-note">${product}</span>
+          ${analysisBadge}
+          ${campaignBadge}
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="ghost-btn" data-action="open-command">Ctrl + K</button>
+        <button class="ghost-btn" data-action="open-tour">Tur ghidat</button>
+        <button class="ghost-btn" data-action="reset-demo">Resetează demo</button>
+      </div>
+    </div>
+  `;
+}
+
+function getCommandPaletteOptions() {
+  const base = navItems.map((item) => ({
+    id: item.id,
+    label: item.label,
+    description: `Navighează rapid la ${item.label}.`,
+    type: 'view',
+  }));
+  return [
+    ...base,
+    {
+      id: 'action-demo',
+      label: 'Activează modul demo',
+      description: 'Completează automat onboarding-ul și sari direct în aplicație.',
+      type: 'action',
+    },
+    {
+      id: 'action-tour',
+      label: 'Pornește turul ghidat',
+      description: 'Descoperă principalele module pas cu pas.',
+      type: 'action',
+    },
+    {
+      id: 'action-reset',
+      label: 'Resetează demo-ul',
+      description: 'Șterge datele salvate local și reia experiența.',
+      type: 'action',
+    },
+  ];
+}
+
+function renderCommandPalette() {
+  const options = getCommandPaletteOptions();
+  const query = (state.commandQuery || '').toLowerCase();
+  const filtered = options.filter((option) => {
+    if (!query) return true;
+    return (
+      option.label.toLowerCase().includes(query) || option.description.toLowerCase().includes(query)
+    );
+  });
+  const listHtml = filtered.length
+    ? filtered
+        .map(
+          (option) => `
+            <li data-command-option="${option.id}" data-command-type="${option.type}">
+              <strong>${option.label}</strong>
+              <span>${option.description}</span>
+            </li>
+          `
+        )
+        .join('')
+    : '<li class="empty">Nicio comandă nu corespunde căutării.</li>';
+  return `
+    <div class="overlay command-overlay">
+      <div class="command-modal">
+        <div class="command-header">
+          <input
+            id="command-input"
+            type="text"
+            placeholder="Caută module sau acțiuni (ex: Calendar)"
+            value="${state.commandQuery}"
+          />
+          <button class="ghost-btn" data-command-close>Închide</button>
+        </div>
+        <ul class="command-list">${listHtml}</ul>
+        <p class="command-hint">Enter aplică prima opțiune. Escape închide panoul.</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderTourOverlay() {
+  const totalSteps = tourSteps.length;
+  const currentIndex = Math.min(Math.max(state.tourStep || 0, 0), totalSteps - 1);
+  const step = tourSteps[currentIndex];
+  const progress = Math.round(((currentIndex + 1) / totalSteps) * 100);
+  const viewLabel = navItems.find((item) => item.id === step.view)?.label || 'Modul';
+  return `
+    <div class="overlay tour-overlay">
+      <div class="tour-modal">
+        <div class="tour-progress">
+          <div class="progress-track small">
+            <div class="progress-fill" style="width:${progress}%"></div>
+          </div>
+          <span>Pas ${currentIndex + 1} / ${totalSteps}</span>
+        </div>
+        <h3>${step.title}</h3>
+        <p>${step.description}</p>
+        <div class="tour-tags">
+          <span class="badge info">${viewLabel}</span>
+        </div>
+        <div class="tour-actions">
+          <button class="ghost-btn" data-tour-action="close">Închide</button>
+          <div class="tour-actions-right">
+            <button class="secondary-btn" data-tour-action="prev" ${
+              currentIndex === 0 ? 'disabled' : ''
+            }>Înapoi</button>
+            <button class="primary-btn" data-tour-action="jump">Du-mă acolo</button>
+            <button class="primary-btn outline" data-tour-action="next">${
+              currentIndex === totalSteps - 1 ? 'Finalizează' : 'Pasul următor'
+            }</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function closeCommandPalette() {
+  state.showCommandPalette = false;
+  state.commandQuery = '';
+  render();
+}
+
+function handleCommandSelection(optionId, optionType) {
+  if (optionType === 'view') {
+    state.currentView = optionId;
+    closeCommandPalette();
+    return;
+  }
+  if (optionId === 'action-reset') {
+    closeCommandPalette();
+    resetState();
+    return;
+  }
+  if (optionId === 'action-tour') {
+    closeCommandPalette();
+    state.showTour = true;
+    state.tourStep = 0;
+    render();
+    return;
+  }
+  if (optionId === 'action-demo') {
+    closeCommandPalette();
+    enterDemoMode();
+  }
+}
+
+function setupCommandPalette() {
+  const overlay = document.querySelector('.command-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        closeCommandPalette();
+      }
+    });
+  }
+  const closeBtn = document.querySelector('[data-command-close]');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => closeCommandPalette());
+  }
+  const input = document.getElementById('command-input');
+  if (input) {
+    setTimeout(() => input.focus(), 0);
+    input.addEventListener('input', (event) => {
+      state.commandQuery = event.target.value;
+      render();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const firstOption = document.querySelector('[data-command-option]');
+        if (firstOption) {
+          handleCommandSelection(
+            firstOption.getAttribute('data-command-option'),
+            firstOption.getAttribute('data-command-type')
+          );
+        }
+      }
+    });
+  }
+  document.querySelectorAll('[data-command-option]').forEach((element) => {
+    element.addEventListener('click', () => {
+      handleCommandSelection(
+        element.getAttribute('data-command-option'),
+        element.getAttribute('data-command-type')
+      );
+    });
+  });
+}
+
+function handleTourAction(action) {
+  const totalSteps = tourSteps.length;
+  if (action === 'close') {
+    state.showTour = false;
+    render();
+    return;
+  }
+  if (action === 'prev') {
+    state.tourStep = Math.max(0, (state.tourStep || 0) - 1);
+    render();
+    return;
+  }
+  if (action === 'next') {
+    if ((state.tourStep || 0) >= totalSteps - 1) {
+      state.showTour = false;
+    } else {
+      state.tourStep += 1;
+    }
+    render();
+    return;
+  }
+  if (action === 'jump') {
+    const step = tourSteps[Math.min(state.tourStep || 0, totalSteps - 1)];
+    if (step) {
+      state.currentView = step.view;
+    }
+    state.showTour = false;
+    render();
+  }
+}
+
+function setupTourOverlay() {
+  const overlay = document.querySelector('.tour-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        state.showTour = false;
+        render();
+      }
+    });
+  }
+  document.querySelectorAll('[data-tour-action]').forEach((element) => {
+    element.addEventListener('click', () => {
+      handleTourAction(element.getAttribute('data-tour-action'));
+    });
+  });
 }
 
 function guessIndustry(productHint) {
@@ -724,6 +1087,7 @@ function renderLogin() {
             <button type="submit" class="primary-btn">Intră în platformă</button>
             <button type="button" id="to-signup" class="secondary-btn">Creează cont</button>
           </div>
+          <button type="button" id="demo-mode" class="ghost-btn full-width">Explorează demo-ul instant</button>
         </form>
       </section>
     `,
@@ -740,6 +1104,9 @@ function renderLogin() {
       document.getElementById('to-signup').addEventListener('click', () => {
         state.currentView = 'signup';
         render();
+      });
+      document.getElementById('demo-mode').addEventListener('click', () => {
+        enterDemoMode();
       });
     },
   };
@@ -2176,6 +2543,28 @@ const views = {
   dashboard: renderDashboard,
   brain: renderBrain,
 };
+
+document.addEventListener('keydown', (event) => {
+  const key = (event.key || '').toLowerCase();
+  if (!key) return;
+  if ((event.metaKey || event.ctrlKey) && key === 'k') {
+    event.preventDefault();
+    if (!state.user) return;
+    state.showCommandPalette = !state.showCommandPalette;
+    state.commandQuery = '';
+    render();
+  }
+  if (key === 'escape') {
+    if (state.showCommandPalette) {
+      state.showCommandPalette = false;
+      state.commandQuery = '';
+      render();
+    } else if (state.showTour) {
+      state.showTour = false;
+      render();
+    }
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   if (state.user) {

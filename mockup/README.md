@@ -15,6 +15,9 @@ Acest prototip static oferă o experiență interactivă pentru fluxurile MVP de
 - Planificator de campanii cu carduri dedicate, progres și formular de creare rapidă
 - Posibilitatea de a asocia fiecare postare sau intrare din calendar la o campanie, plus filtre și focus AI
 - Modul „Automation & Logs” cu jurnal în timp real, filtre pe tipuri de evenimente și export rapid al activităților
+- Tur ghidat care te plimbă prin modulele principale și setează automat view-ul selectat
+- Command palette (Ctrl/Cmd + K) pentru a căuta rapid module sau acțiuni (reset demo, tur, demo mode)
+- Buton de „Explorează demo-ul” care completează onboarding-ul instant și permite testarea imediată
 
 ## Cum rulezi mockup-ul
 
@@ -35,6 +38,12 @@ funcționeze fără configurații suplimentare. Atunci când creezi proiectul î
 - Găsești un tab dedicat în sidebar care listează toate acțiunile automate: generări de conținut, aprobări, programări în calendar, răspunsuri DM și mutări în pipeline.
 - Filtrează jurnalul pe tipuri (Conținut, Campanii, Calendar, DM, Lead etc.) și folosește butonul „Copiază raportul” pentru a trimite rapid un rezumat colegilor.
 - Orice interacțiune din mockup adaugă automat un eveniment nou, iar tu poți completa manual notițe suplimentare direct din formularul inclus.
+
+### Tur ghidat & Command Palette
+
+- Apasă „Tur ghidat” din bara superioară (sau selectează comanda din paleta Ctrl/Cmd + K) pentru a parcurge pe scurt Overview-ul, Content, Calendarul, Inbox-ul DM, Pipeline-ul și AI Brain.
+- În command palette poți scrie numele unui modul („calendar”, „brain”) sau o acțiune („reset”, „demo”) și intri instant în zona dorită – util când vrei doar să te plimbi prin aplicație.
+- Dacă vrei să sari direct peste onboarding, folosește butonul „Explorează demo-ul instant” din login (sau comanda „Activează modul demo”) și tot fluxul devine navigabil imediat.
 
 ## Notă
 
